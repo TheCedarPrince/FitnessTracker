@@ -43,24 +43,21 @@ export Model
         title = PlotLayoutTitle(text = "Weight Lifted Over Year", font = Font(24)),
         xaxis = [PlotLayoutAxis(xy = "x", title_text = "Date")],
         yaxis = [PlotLayoutAxis(xy = "y", title_text = "Total Weight Lifted per Exercise")],
-	showlegend = true,
+        showlegend = true,
     )
 
     config_weight_data::R{PlotConfig} = PlotConfig()
-    
+
     plot_running_data::R{Vector{PlotData}} = [
-        pd(
-            x = group.WORKOUT_DATE,
-            y = group.DISTANCE,
-            name = first(group.RUN_TYPE),
-        ) for group in groupby(running_data, :RUN_TYPE)
+        pd(x = group.WORKOUT_DATE, y = group.DISTANCE, name = first(group.RUN_TYPE)) for
+        group in groupby(running_data, :RUN_TYPE)
     ]
 
     layout_running_data::R{PlotLayout} = PlotLayout(
         title = PlotLayoutTitle(text = "Distance Ran Over Year", font = Font(24)),
         xaxis = [PlotLayoutAxis(xy = "x", title_text = "Date")],
         yaxis = [PlotLayoutAxis(xy = "y", title_text = "Miles Ran")],
-	showlegend = true,
+        showlegend = true,
     )
 
     config_running_data::R{PlotConfig} = PlotConfig()
@@ -72,18 +69,29 @@ model = Model |> init
 function ui(model)
     page(
         model,
-        class = "container",
         [
-            plot(
-                :plot_weight_data,
-                layout = :layout_weight_data,
-                config = :config_weight_data,
-            ),
-            plot(
-                :plot_running_data,
-                layout = :layout_running_data,
-                config = :config_running_data,
-            ),
+            row([
+                cell(
+                    class = "plots",
+                    [
+                        plot(
+                            :plot_weight_data,
+                            layout = :layout_weight_data,
+                            config = :config_weight_data,
+                        ),
+                    ],
+                ),
+                cell(
+                    class = "plots",
+                    [
+                        plot(
+                            :plot_running_data,
+                            layout = :layout_running_data,
+                            config = :config_running_data,
+                        ),
+                    ],
+                ),
+            ],),
         ],
     )
 end
