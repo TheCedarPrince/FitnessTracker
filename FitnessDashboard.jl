@@ -4,98 +4,85 @@ using FunSQL
 using FunSQL: From, Get, Group, Select, render, reflect
 using Genie, Stipple, StippleUI
 using Genie.Renderers.Html
+using PlotlyBase
 using SQLite
 using Stipple
 using StipplePlotly
+using StipplePlotly: PlotLayout, PlotConfig
 using StippleUI
 
 db = DBInterface.connect(SQLite.DB, "exercise.db")
 table_info = reflect(db).tables
 
 weights = table_info[:weights]
-running = table_info[:running]
 
 weights_data =
     From(weights) |> FunSQL.render |> sql -> DBInterface.execute(db, sql) |> DataFrame
 
 weights_data.WORKOUT_DATE = Dates.Date.(weights_data.WORKOUT_DATE)
+sort!(weights_data, :WORKOUT_DATE)
 
-running_data =
-    From(running) |> FunSQL.render |> sql -> DBInterface.execute(db, sql) |> DataFrame
-
-running_data.WORKOUT_DATE = Dates.Date.(running_data.WORKOUT_DATE)
-
-pd(; x, y, name) =
-    PlotData(x = x, y = y, plot = StipplePlotly.Charts.PLOT_TYPE_LINE, name = name)
-
-export Model
+pd(; x, y) = PlotData(x = x, y = y, plot = StipplePlotly.Charts.PLOT_TYPE_LINE)
 
 @reactive mutable struct Model <: ReactiveModel
-    plot_weight_data::R{Vector{PlotData}} = [
-        pd(
-            x = group.WORKOUT_DATE,
-            y = group.WEIGHT .* group.REPS,
-            name = first(group.EXERCISE),
+    data::R{Vector{Vector{PlotData}}} = [
+        [pd(x = group.WORKOUT_DATE, y = group.WEIGHT .* group.REPS)] for
+        group in groupby(weights_data, :EXERCISE)
+    ]
+    layout::R{Vector{PlotLayout}} = [
+        PlotLayout(
+            title = PlotLayoutTitle(text = "$(group.EXERCISE |> first)", font = Font(24)),
+            xaxis = [PlotLayoutAxis(xy = "x", title_text = "Date", font = Font(14))],
+            yaxis = [
+                PlotLayoutAxis(
+                    xy = "y",
+                    title_text = "Total Weight Lifted",
+                    font = Font(14),
+                ),
+            ],
+            showlegend = false,
+            margin_r = 0,
         ) for group in groupby(weights_data, :EXERCISE)
     ]
 
-    layout_weight_data::R{PlotLayout} = PlotLayout(
-        title = PlotLayoutTitle(text = "Weight Lifted Over Year", font = Font(24)),
-        xaxis = [PlotLayoutAxis(xy = "x", title_text = "Date")],
-        yaxis = [PlotLayoutAxis(xy = "y", title_text = "Total Weight Lifted per Exercise")],
-        showlegend = true,
-    )
-
-    config_weight_data::R{PlotConfig} = PlotConfig()
-
-    plot_running_data::R{Vector{PlotData}} = [
-        pd(x = group.WORKOUT_DATE, y = group.DISTANCE, name = first(group.RUN_TYPE)) for
-        group in groupby(running_data, :RUN_TYPE)
-    ]
-
-    layout_running_data::R{PlotLayout} = PlotLayout(
-        title = PlotLayoutTitle(text = "Distance Ran Over Year", font = Font(24)),
-        xaxis = [PlotLayoutAxis(xy = "x", title_text = "Date")],
-        yaxis = [PlotLayoutAxis(xy = "y", title_text = "Miles Ran")],
-        showlegend = true,
-    )
-
-    config_running_data::R{PlotConfig} = PlotConfig()
-
 end
 
-model = Model |> init
+function handlers(model)
+    on(model.isready) do isready
+        isready || return
+        push!(model)
+    end
 
-function ui(model)
+    model
+end
+
+function ui(model::Model)
     page(
         model,
+        class = "container",
         [
+            row([h1("Weight Lifting Exercises")])
             row([
                 cell(
-                    class = "plots",
-                    [
-                        plot(
-                            :plot_weight_data,
-                            layout = :layout_weight_data,
-                            config = :config_weight_data,
-                        ),
-                    ],
+                    class = "st-module",
+                    [plot("data[index-1]", layout = "layout[index-1]")],
+                    @recur("index in 5")
                 ),
+            ])
+            row([
                 cell(
-                    class = "plots",
-                    [
-                        plot(
-                            :plot_running_data,
-                            layout = :layout_running_data,
-                            config = :config_running_data,
-                        ),
-                    ],
+                    class = "st-module",
+                    [plot("data[index+4]", layout = "layout[index+4]")],
+                    @recur("index in 5")
                 ),
-            ],),
+            ])
         ],
     )
 end
 
+model = init(Model)
 route("/") do
-    Stipple.init(Model) |> ui |> html
+    model |> handlers |> ui |> html
 end
+
+up(8000)
